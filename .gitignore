@@ -1,0 +1,12 @@
+venv/
+__pycache__/
+*.pyc
+phish_history.db
+*.env
+.venv
+__pypackages__/
+.idea/
+.vscode/
+dist/
+build/
+*.db

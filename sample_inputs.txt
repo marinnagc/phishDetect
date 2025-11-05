@@ -1,0 +1,5 @@
+https://www.google.com
+https://www.github.com
+http://example.com
+https://httpbin.org/forms/post
+https://httpbin.org/redirect/2
