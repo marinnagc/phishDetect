@@ -12,6 +12,7 @@ import dns.resolver
 import validators
 import logging
 import re
+import time
 
 logging.basicConfig(level=logging.INFO)
 BRAND_LIST = [
@@ -79,55 +80,125 @@ def detect_basic_suspicious_patterns(domain: str):
 def is_shortened(netloc):
     return any(s in netloc for s in SHORTENERS)
 
-def expand_url(url, timeout=6):
+def expand_url(url, timeout=10):
     try:
         r = requests.head(url, allow_redirects=True, timeout=timeout)
         return r.url
-    except Exception:
+    except Exception as e:
+        logging.warning(f"Erro ao expandir URL {url}: {e}")
         return url
 
-import whois
 
-def get_whois_info(domain: str):
-    import whois
-    import datetime
-    try:
-        w = whois.whois(domain)
-        registrar = w.get("registrar")
-        creation_date = w.get("creation_date")
-        if isinstance(creation_date, list):
-            creation_date = creation_date[0]
-
-        # Calcula idade se possível
-        age_days = None
-        if creation_date:
-            if isinstance(creation_date, datetime.datetime):
-                creation_date_str = creation_date.strftime("%Y-%m-%d %H:%M:%S")
-                creation_date = creation_date_str
-            else:
-                creation_date_str = str(creation_date)
+def get_whois_info(domain: str, max_retries=2):
+    """
+    Obtém informações WHOIS do domínio com retry e melhor tratamento de erros.
+    """
+    import time
+    
+    for attempt in range(max_retries):
+        try:
+            # Define timeout através de socket (whois usa socket internamente)
+            import socket
+            original_timeout = socket.getdefaulttimeout()
+            socket.setdefaulttimeout(10)
+            
             try:
-                dt = datetime.datetime.strptime(creation_date_str, "%Y-%m-%d %H:%M:%S")
-                age_days = (datetime.datetime.utcnow() - dt).days
-            except Exception:
-                age_days = None
-        else:
+                w = whois.whois(domain)
+            finally:
+                socket.setdefaulttimeout(original_timeout)
+            
+            # Extrai registrar
+            registrar = w.get("registrar")
+            if isinstance(registrar, list) and registrar:
+                registrar = registrar[0]
+            
+            # Extrai creation_date
+            creation_date = w.get("creation_date")
+            if isinstance(creation_date, list) and creation_date:
+                creation_date = creation_date[0]
+            
+            # Calcula idade se possível
+            age_days = None
             creation_date_str = None
-
-        return {
-            "registrar": registrar,
-            "creation_date": creation_date_str,  # <- sempre string
-            "age_days": age_days,
-            "error": None,
-        }
-
-    except Exception as e:
-        return {
-            "registrar": None,
-            "creation_date": None,
-            "age_days": None,
-            "error": str(e),
-        }
+            
+            if creation_date:
+                # Converte para datetime se necessário
+                if isinstance(creation_date, datetime.datetime):
+                    dt = creation_date
+                    creation_date_str = creation_date.strftime("%Y-%m-%d %H:%M:%S")
+                elif isinstance(creation_date, str):
+                    creation_date_str = creation_date
+                    # Tenta parsear diferentes formatos de data
+                    for fmt in ["%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d-%b-%Y", "%Y/%m/%d"]:
+                        try:
+                            dt = datetime.datetime.strptime(creation_date_str, fmt)
+                            break
+                        except ValueError:
+                            continue
+                    else:
+                        # Se nenhum formato funcionou, tenta com pandas
+                        try:
+                            dt = pd.to_datetime(creation_date_str).to_pydatetime()
+                        except Exception:
+                            dt = None
+                else:
+                    dt = None
+                
+                # Calcula idade em dias
+                if dt:
+                    # Remove timezone info para evitar erro de offset-naive vs offset-aware
+                    if dt.tzinfo is not None:
+                        dt = dt.replace(tzinfo=None)
+                    age_days = (datetime.datetime.utcnow() - dt).days
+            
+            return {
+                "registrar": registrar,
+                "creation_date": creation_date_str,
+                "age_days": age_days,
+                "error": None,
+            }
+        
+        except socket.timeout:
+            if attempt < max_retries - 1:
+                time.sleep(1)  # Aguarda antes de tentar novamente
+                continue
+            return {
+                "registrar": None,
+                "creation_date": None,
+                "age_days": None,
+                "error": "WHOIS timeout - servidor não respondeu",
+            }
+        
+        except Exception as e:
+            error_msg = str(e).lower()
+            # Verifica se é um erro de whois específico (domínio não encontrado, etc)
+            if any(x in error_msg for x in ['no match', 'not found', 'no whois', 'no data']):
+                return {
+                    "registrar": None,
+                    "creation_date": None,
+                    "age_days": None,
+                    "error": f"WHOIS não disponível para este domínio: {str(e)}",
+                }
+            
+            # Para outros erros, tenta novamente se ainda há tentativas
+            if attempt < max_retries - 1:
+                time.sleep(1)
+                continue
+            
+            return {
+                "registrar": None,
+                "creation_date": None,
+                "age_days": None,
+                "error": f"Erro ao consultar WHOIS: {str(e)}",
+            }
+    
+    # Se chegou aqui, todas as tentativas falharam
+    return {
+        "registrar": None,
+        "creation_date": None,
+        "age_days": None,
+        "error": "WHOIS falhou após múltiplas tentativas",
+    }
 
 
 
@@ -147,9 +218,10 @@ def get_domain_age_days(whois_info):
     except Exception:
         return None
 
-def check_ssl(hostname, port=443, timeout=5):
+def check_ssl(hostname, port=443, timeout=15, max_retries=1):
     """
-    Tenta obter o certificado SSL/TLS, checar expiração e coincidência de hostname.
+    Tenta obter o certificado SSL/TLS de forma rápida.
+    Se não conseguir em 15s, provavelmente o site não tem HTTPS.
     """
     result = {
         "valid": False,
@@ -159,42 +231,140 @@ def check_ssl(hostname, port=443, timeout=5):
         "hostname_matches": None,
         "error": None,
     }
+    
+    # Primeiro tenta verificar se a porta está aberta
     try:
-        ctx = ssl.create_default_context()
-        with socket.create_connection((hostname, port), timeout=timeout) as sock:
-            with ctx.wrap_socket(sock, server_hostname=hostname) as ssock:
-                cert = ssock.getpeercert()
-                result["issuer"] = cert.get("issuer")
-                notAfter = cert.get("notAfter")
-                result["notAfter"] = notAfter
-
-                # Verificar expiração
-                if notAfter:
-                    try:
-                        exp = datetime.datetime.strptime(
-                            notAfter, "%b %d %H:%M:%S %Y %Z"
-                        )
-                        result["expired"] = exp < datetime.datetime.utcnow()
-                    except Exception:
-                        result["expired"] = None
-
-                # Verificar se o hostname bate com o certificado
-                try:
-                    ssl.match_hostname(cert, hostname)
-                    result["hostname_matches"] = True
-                except Exception:
-                    result["hostname_matches"] = False
-
-                # Considera válido se conseguiu pegar o cert e não está claramente expirado
-                if result["expired"] is False and result["hostname_matches"] is not False:
-                    result["valid"] = True
-                elif result["hostname_matches"] is False:
-                    # não tratar mismatch simples (www vs sem www) como SSL inválido total
-                    result["valid"] = True
-
-
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(5)  # 5s apenas para verificar se porta está aberta
+        result_connect = sock.connect_ex((hostname, port))
+        sock.close()
+        
+        if result_connect != 0:
+            # Porta não está aberta - site não tem HTTPS
+            result["error"] = "Site não possui HTTPS (porta 443 fechada)"
+            logging.info(f"SSL port closed para {hostname}")
+            return result
     except Exception as e:
-        result["error"] = str(e)
+        result["error"] = f"Não foi possível verificar HTTPS: {str(e)[:50]}"
+        return result
+    
+    # Se chegou aqui, a porta está aberta - tenta pegar certificado
+    for attempt in range(max_retries):
+        try:
+            # Configuração SSL - precisa de verify para pegar certificado
+            ctx = ssl.create_default_context()
+            
+            # Socket com timeout
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(timeout)
+            
+            try:
+                sock.connect((hostname, port))
+                
+                # Tenta obter certificado
+                cert = None
+                try:
+                    with ctx.wrap_socket(sock, server_hostname=hostname) as ssock:
+                        cert = ssock.getpeercert()
+                except Exception as e1:
+                    # Se falhar com verificação, tenta sem verificar mas ainda pega o cert
+                    logging.info(f"Tentativa 1 falhou para {hostname}: {e1}, tentando sem verificação...")
+                    ctx2 = ssl.create_default_context()
+                    ctx2.check_hostname = False
+                    ctx2.verify_mode = ssl.CERT_NONE
+                    
+                    sock2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    sock2.settimeout(timeout)
+                    try:
+                        sock2.connect((hostname, port))
+                        with ctx2.wrap_socket(sock2, server_hostname=hostname) as ssock:
+                            cert = ssock.getpeercert(binary_form=False)
+                            if not cert:
+                                # Tenta pegar de outra forma
+                                cert = ssock.getpeercert()
+                    except Exception as e2:
+                        logging.warning(f"Erro ao obter certificado SSL de {hostname}: {e2}")
+                        result["error"] = f"Erro SSL: {str(e2)[:100]}"
+                        return result
+                    finally:
+                        sock2.close()
+                
+                if cert:
+                    result["issuer"] = cert.get("issuer")
+                    notAfter = cert.get("notAfter")
+                    result["notAfter"] = notAfter
+
+                    # Verificar expiração
+                    if notAfter:
+                        try:
+                            exp = datetime.datetime.strptime(
+                                notAfter, "%b %d %H:%M:%S %Y %Z"
+                            )
+                            result["expired"] = exp < datetime.datetime.utcnow()
+                        except Exception:
+                            result["expired"] = None
+
+                    # Verificar se o hostname bate com o certificado
+                    try:
+                        ssl.match_hostname(cert, hostname)
+                        result["hostname_matches"] = True
+                    except Exception:
+                        result["hostname_matches"] = False
+
+                    # Considera válido se conseguiu pegar o cert e não está claramente expirado
+                    if result["expired"] is False:
+                        result["valid"] = True
+                    elif result["expired"] is None and result["hostname_matches"] is not False:
+                        result["valid"] = True
+                    
+                    # Sucesso! Sai do loop de retry
+                    return result
+                else:
+                    result["error"] = "Certificado SSL vazio ou inválido"
+                    return result
+            
+            finally:
+                sock.close()
+
+        except socket.timeout:
+            if attempt < max_retries - 1:
+                time.sleep(0.5)
+                continue
+            # Timeout não é erro fatal - apenas aviso
+            result["error"] = f"Verificação SSL não concluída (timeout {timeout}s) - não afeta pontuação"
+            logging.warning(f"SSL timeout para {hostname}")
+            return result
+            
+        except socket.gaierror as e:
+            # Erro de DNS - não vale a pena fazer retry
+            result["error"] = f"Erro de DNS: não foi possível resolver o hostname"
+            logging.warning(f"DNS error para {hostname}: {e}")
+            return result
+            
+        except ssl.SSLError as e:
+            # Erro SSL específico - pode ser certificado auto-assinado, protocolo antigo, etc
+            # Não considera erro fatal para análise
+            result["error"] = f"Aviso SSL: {str(e)[:100]}"
+            result["valid"] = False
+            logging.warning(f"SSL error para {hostname}: {e}")
+            return result
+            
+        except ConnectionRefusedError:
+            result["error"] = f"Conexão recusada na porta {port} - servidor não aceita HTTPS"
+            logging.warning(f"Connection refused para {hostname}:{port}")
+            return result
+            
+        except Exception as e:
+            error_msg = str(e).lower()
+            # Se for timeout genérico, não tenta novamente (já tentamos)
+            if 'timeout' in error_msg or 'timed out' in error_msg:
+                result["error"] = f"Timeout ao conectar - servidor muito lento"
+                logging.warning(f"Generic timeout para {hostname}")
+            else:
+                result["error"] = f"Erro ao verificar SSL: {str(e)}"
+                if attempt < max_retries - 1:
+                    time.sleep(1)
+                    continue
 
     return result
 
@@ -222,10 +392,11 @@ def is_dynamic_dns(domain: str) -> bool:
 
 def get_redirection_chain(url):
     try:
-        r = requests.get(url, allow_redirects=True, timeout=6, headers={"User-Agent":"PhishDetect/0.1"})
+        r = requests.get(url, allow_redirects=True, timeout=10, headers={"User-Agent":"PhishDetect/0.1"})
         chain = [resp.url for resp in r.history] + [r.url]
         return chain
-    except Exception:
+    except Exception as e:
+        logging.warning(f"Erro ao verificar redirecionamentos de {url}: {e}")
         return []
 
 def detect_forms(html):
@@ -300,9 +471,10 @@ def analyze_url(url: str):
     # fetch content (safe: only GET; limit size)
     content = ""
     try:
-        r = requests.get(url, timeout=6, headers={"User-Agent":"PhishDetect/0.1"})
+        r = requests.get(url, timeout=10, headers={"User-Agent":"PhishDetect/0.1"})
         content = r.text[:200000]
-    except Exception:
+    except Exception as e:
+        logging.warning(f"Erro ao buscar conteúdo de {url}: {e}")
         content = ""
 
     forms = detect_forms(content)
@@ -320,7 +492,7 @@ def analyze_url(url: str):
         score += 30
         flags.append("young_domain")
 
-    # SSL
+    # SSL - penaliza qualquer problema incluindo timeout
     if not ssl_info.get("valid", False):
         score += 25
         flags.append("ssl_invalid")
