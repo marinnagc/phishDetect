@@ -291,19 +291,19 @@ docker run -p 8000:8000 -p 8502:8502 phishdetect-b
 ### 10. Evidências Visuais
 
 #### 11.1 Interface Principal - Nova Análise
-![Nova Análise](image1.png)
+![Nova Análise](images/image1.png)
 *Tela de análise com blocos visuais mostrando resultados detalhados de cada teste*
 
 #### 11.2 Histórico de Análises
-![Histórico](image2.png)
+![Histórico](images/image2.png)
 *Dashboard com estatísticas globais, gráfico de distribuição de flags e histórico completo*
 
 #### 11.3 Gráfico de Distribuição
-![Gráfico](image3.png)
+![Gráfico](images/image3.png)
 *Visualização da frequência de cada tipo de flag detectada nas análises*
 
 #### 11.4 Relatórios Detalhados
-![Relatórios](image4.png)
+![Relatórios](images/image4.png)
 *Seleção e visualização de análises específicas por ID com opções de download*
 
 ---
@@ -330,12 +330,65 @@ O **PhishDetect** atende todos os requisitos do Conceito B, implementando análi
 ### 12. Anexos
 
 #### Arquivos de Evidência Incluídos:
-- `image1.png`: Interface de Nova Análise com blocos visuais
-- `image2.png`: Dashboard do Histórico com estatísticas
-- `image3.png`: Gráfico de distribuição de flags
-- `image4.png`: Tela de Relatórios Detalhados
+- `images/image1.png`: Interface de Nova Análise com blocos visuais
+- `images/image2.png`: Dashboard do Histórico com estatísticas
+- `images/image3.png`: Gráfico de distribuição de flags
+- `images/image4.png`: Tela de Relatórios Detalhados
 - `phish_history.csv`: Exportação do histórico completo (gerado em runtime)
 - `phishdetect_relatorio_id_56.txt`: **Exemplo de relatório gerado automaticamente pelo sistema**
 - Relatórios individuais em TXT/JSON disponíveis via interface de download
+
+#### Exemplo de Relatório Automático (phishdetect_relatorio_id_56.txt):
+
+```
+============================================================
+RELATÓRIO PADRONIZADO DE ANÁLISE DE URL - PHISHDETECT
+============================================================
+
+1. DADOS GERAIS
+- URL analisada: http://phishing.duckdns.org/
+- Domínio: phishing.duckdns.org
+- Score de risco: 65/100
+- Nível de risco (heurístico): MODERADO
+
+2. CARACTERÍSTICAS TÉCNICAS DO DOMÍNIO
+- Registrar (WHOIS): None
+- Data de criação registrada (WHOIS): None
+- Idade aproximada do domínio: Não foi possível determinar a idade do domínio.
+- Informações de DNS: Registros A: 86.159.11.135 | Registros MX: 50 phishing.duckdns.org.
+
+3. CERTIFICADO SSL/TLS
+- Situação: Houve falha na validação do certificado SSL/TLS: Site não possui HTTPS (porta 443 fechada)
+- Emissor do certificado (quando disponível): None
+- Validade (notAfter, quando disponível): None
+- Expirado: None
+- Coincidência de hostname no certificado: None
+
+4. REDIRECIONAMENTOS
+- Cadeia de redirecionamentos (URL final é o último elemento): []
+- Resumo: Nenhum redirecionamento adicional foi identificado.
+
+5. ANÁLISE DE CONTEÚDO E FORMULÁRIOS
+- Quantidade de formulários = 0
+- Detalhes: Não foram encontrados formulários na página analisada.
+
+6. SIMILARIDADE COM MARCAS CONHECIDAS
+- Resultado: Não foram encontradas similaridades significativas com domínios de marcas conhecidas.
+
+7. CARACTERÍSTICAS SUSPEITAS (FLAGS)
+- Flags detectadas:
+  - young_domain: Domínio recente (ou sem dados WHOIS confiáveis), o que aumenta o risco.
+  - ssl_invalid: Problema na verificação do certificado SSL/TLS (inválido, ausente ou erro na conexão).
+  - dynamic_dns: Domínio aparenta usar serviço de DNS dinâmico (no-ip, dyndns), comum em cenários maliciosos.
+
+8. AVALIAÇÃO GERAL E RECOMENDAÇÕES
+Com base nas heurísticas implementadas (idade do domínio, SSL, redirecionamentos,
+presença de formulários sensíveis, similaridade com marcas e listas de reputação),
+o score de risco calculado foi de 65/100, resultando no nível de risco: MODERADO.
+
+Recomendações:
+- Recomenda-se cautela ao acessar esta URL, validação adicional por equipe de segurança 
+e monitoramento de novos acessos ou alterações no domínio.
+```
 
 **Fim do Relatório**
