@@ -11,7 +11,7 @@ root_dir = Path(__file__).parent.parent
 if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
 
-from app.db import read_history, init_db
+from app.db import read_history, init_db, delete_by_id, clear_all_history
 
 API_URL = "http://127.0.0.1:8000/analyze"
 
@@ -268,18 +268,18 @@ def main():
 
         with st.form("analyze_form"):
             url = st.text_input(
-                "🌐 URL para verificar", 
+                "URL para verificar", 
                 value="",
                 placeholder="https://exemplo.com.br"
             )
             col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 2])
             with col_btn1:
-                submitted = st.form_submit_button("🔍 Analisar", use_container_width=True)
+                submitted = st.form_submit_button("Analisar", use_container_width=True)
             with col_btn2:
-                clear = st.form_submit_button("🗑️ Limpar", use_container_width=True)
+                clear = st.form_submit_button("Limpar", use_container_width=True)
 
         if submitted and url:
-            with st.spinner("🔍 Analisando URL... (isso pode levar alguns minutos)"):
+            with st.spinner("Analisando URL... (isso pode levar alguns minutos)"):
                 try:
                     r = requests.post(API_URL, json={"url": url}, timeout=120)
                     if r.status_code == 200:
@@ -288,7 +288,7 @@ def main():
                         # Header com score e nível de risco
                         score = res['score']
                         if score >= 70:
-                            st.error(f"⚠️ ALTO RISCO — Score: {score}/100")
+                            st.error(f"ALTO RISCO — Score: {score}/100")
                             risk_color = "red"
                             risk_emoji = "🔴"
                         elif score >= 40:
@@ -296,7 +296,7 @@ def main():
                             risk_color = "orange"
                             risk_emoji = "🟡"
                         else:
-                            st.success(f"✅ BAIXO RISCO — Score: {score}/100")
+                            st.success(f"BAIXO RISCO — Score: {score}/100")
                             risk_color = "green"
                             risk_emoji = "🟢"
 
@@ -304,23 +304,23 @@ def main():
                         st.markdown("---")
                         col1, col2, col3 = st.columns(3)
                         with col1:
-                            st.metric("🎯 Score de Risco", f"{score}/100")
+                            st.metric("Score de Risco", f"{score}/100")
                         with col2:
-                            st.metric("🌐 Domínio", res["domain"])
+                            st.metric("Domínio", res["domain"])
                         with col3:
                             flags_count = len(res.get("flags", []))
                             st.metric("🚩 Flags Detectadas", flags_count)
 
                         # Blocos de teste estilizados
                         st.markdown("---")
-                        st.subheader("📊 Resultados dos Testes")
+                        st.subheader("Resultados dos Testes")
                         
                         # 1. BLACKLIST
                         with st.expander("🛡️ Verificação em Blacklist", expanded=True):
                             if res.get("blacklisted"):
-                                st.error("❌ **FALHOU** — Domínio encontrado em lista de sites maliciosos")
+                                st.error("**FALHOU** — Domínio encontrado em lista de sites maliciosos")
                             else:
-                                st.success("✅ **PASSOU** — Domínio não está em listas de phishing conhecidas")
+                                st.success("**PASSOU** — Domínio não está em listas de phishing conhecidas")
                         
                         # 2. WHOIS / IDADE DO DOMÍNIO
                         with st.expander("📅 Idade do Domínio (WHOIS)", expanded=True):
@@ -342,7 +342,7 @@ def main():
                                 st.caption(f"🏢 Registrar: {whois.get('registrar', 'N/A')}")
                         
                         # 3. CERTIFICADO SSL
-                        with st.expander("🔒 Certificado SSL/TLS", expanded=True):
+                        with st.expander("Certificado SSL/TLS", expanded=True):
                             ssl_info = res.get("ssl", {})
                             ssl_valid = ssl_info.get("valid", False)
                             ssl_error = ssl_info.get("error")
@@ -361,33 +361,33 @@ def main():
                                 st.error("❌ **FALHOU** — Certificado SSL inválido ou ausente")
                             else:
                                 if ssl_info.get("expired"):
-                                    st.error("❌ **FALHOU** — Certificado expirado")
-                                elif ssl_info.get("hostname_matches") is False:
-                                    st.warning("⚠️ **AVISO** — Hostname não coincide com certificado")
+                                    st.error("**FALHOU** — Certificado expirado")
+                                elif ssl_info.get("hostname_mismatch"):
+                                    st.warning("**AVISO** — Hostname não coincide com certificado")
                                 else:
-                                    st.success("✅ **PASSOU** — Certificado SSL válido")
+                                    st.success("**PASSOU** — Certificado SSL válido")
                                 
                                 if ssl_info.get("issuer"):
                                     st.caption(f"🏛️ Emissor: {ssl_info.get('issuer')}")
                                 if ssl_info.get("notAfter"):
-                                    st.caption(f"⏰ Válido até: {ssl_info.get('notAfter')}")
+                                    st.caption(f"Válido até: {ssl_info.get('notAfter')}")
                         
                         # 4. DNS DINÂMICO
                         with st.expander("🌍 DNS Dinâmico", expanded=False):
                             if res.get("dynamic_dns"):
-                                st.warning("⚠️ **SUSPEITO** — Usa serviço de DNS dinâmico (no-ip, dyndns)")
+                                st.warning("**SUSPEITO** — Usa serviço de DNS dinâmico (no-ip, dyndns)")
                             else:
-                                st.success("✅ **PASSOU** — Não usa DNS dinâmico conhecido")
+                                st.success("**PASSOU** — Não usa DNS dinâmico conhecido")
                         
                         # 5. REDIRECIONAMENTOS
                         with st.expander("🔀 Redirecionamentos", expanded=False):
                             redirects = res.get("redirect_chain", [])
                             if len(redirects) > 1:
-                                st.warning(f"⚠️ **DETECTADO** — {len(redirects)-1} redirecionamento(s)")
-                                for i, redir in enumerate(redirects):
-                                    st.caption(f"{i+1}. {redir}")
+                                st.warning(f"**DETECTADO** — {len(redirects)-1} redirecionamento(s)")
+                                for i, r in enumerate(redirects):
+                                    st.caption(f"{i+1}. {r}")
                             else:
-                                st.success("✅ **PASSOU** — Sem redirecionamentos")
+                                st.success("**PASSOU** — Sem redirecionamentos")
                         
                         # 6. SIMILARIDADE COM MARCAS
                         with st.expander("🏷️ Similaridade com Marcas (Typosquatting)", expanded=False):
@@ -404,32 +404,32 @@ def main():
                                         st.caption(f"• {brand_info['brand']}: {brand_info['similarity']*100:.1f}%")
                         
                         # 7. FORMULÁRIOS E CAMPOS SENSÍVEIS
-                        with st.expander("📝 Formulários e Dados Sensíveis", expanded=False):
+                        with st.expander("Formulários e Dados Sensíveis", expanded=False):
                             forms = res.get("forms", [])
                             if not forms:
-                                st.info("ℹ️ **INFO** — Nenhum formulário detectado")
+                                st.info("**INFO** — Nenhum formulário detectado")
                             else:
                                 has_password = any(f.get("has_password") for f in forms)
                                 has_sensitive = any(f.get("sensitive_names") for f in forms)
                                 
                                 if has_password or has_sensitive:
-                                    st.warning(f"⚠️ **DETECTADO** — {len(forms)} formulário(s) com campos sensíveis")
+                                    st.warning(f"**DETECTADO** — {len(forms)} formulário(s) com campos sensíveis")
                                     for i, form in enumerate(forms):
                                         if form.get("has_password"):
                                             st.caption(f"• Formulário {i+1}: Campo de senha detectado")
                                         if form.get("sensitive_names"):
                                             st.caption(f"• Formulário {i+1}: Campos sensíveis (CPF, cartão, etc)")
                                 else:
-                                    st.info(f"ℹ️ **INFO** — {len(forms)} formulário(s) sem campos sensíveis")
+                                    st.info(f"**INFO** — {len(forms)} formulário(s) sem campos sensíveis")
                         
                         # 8. PADRÕES BÁSICOS SUSPEITOS
-                        with st.expander("🔍 Padrões Básicos Suspeitos", expanded=False):
+                        with st.expander("Padrões Básicos Suspeitos", expanded=False):
                             basic = res.get("basic_patterns", {})
                             flags = res.get("flags", [])
                             suspicious_flags = [f for f in flags if f in ["many_subdomains", "special_chars_in_domain", "numbers_in_place_of_letters"]]
                             
                             if suspicious_flags:
-                                st.warning(f"⚠️ **DETECTADO** — {len(suspicious_flags)} padrão(ões) suspeito(s)")
+                                st.warning(f"**DETECTADO** — {len(suspicious_flags)} padrão(ões) suspeito(s)")
                                 if "many_subdomains" in flags:
                                     st.caption(f"• Excesso de subdomínios ({basic.get('num_subdomains', 0)})")
                                 if "special_chars_in_domain" in flags:
@@ -437,7 +437,7 @@ def main():
                                 if "numbers_in_place_of_letters" in flags:
                                     st.caption(f"• Números substituindo letras ({basic.get('num_leet_chars', 0)} ocorrências)")
                             else:
-                                st.success("✅ **PASSOU** — Sem padrões básicos suspeitos")
+                                st.success("**PASSOU** — Sem padrões básicos suspeitos")
 
                         # Relatório completo com download
                         st.markdown("---")
@@ -481,13 +481,13 @@ def main():
     # ABA 2: HISTÓRICO
     # ---------------------------------------------------------------------
     with tab2:
-        st.markdown("### 📊 Histórico de Análises")
+        st.markdown("### Histórico de Análises")
 
         if df.empty:
             st.info("Nenhuma análise registrada ainda. Faça uma análise na aba 'Nova Análise'.")
         else:
             # Estatísticas gerais
-            st.markdown("#### 📈 Estatísticas Gerais")
+            st.markdown("#### Estatísticas Gerais")
             col1, col2, col3, col4 = st.columns(4)
             with col1:
                 st.metric("Total de Análises", len(df))
@@ -513,19 +513,34 @@ def main():
 
             # Exportar CSV completo
             st.markdown("---")
-            st.markdown("#### 💾 Exportar Dados")
-            csv = df.to_csv(index=False)
-            st.download_button(
-                "📥 Baixar Histórico Completo (CSV)",
-                csv,
-                file_name="phishdetect_historico_completo.csv",
-                mime="text/csv",
-                use_container_width=True
-            )
+            st.markdown("#### 💾 Gerenciar Dados")
+            
+            col_export1, col_export2 = st.columns(2)
+            
+            with col_export1:
+                csv = df.to_csv(index=False)
+                st.download_button(
+                    "📥 Baixar Histórico Completo (CSV)",
+                    csv,
+                    file_name="phishdetect_historico_completo.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+            
+            with col_export2:
+                if st.button("Limpar Todo Histórico", type="secondary", use_container_width=True):
+                    if st.session_state.get('confirm_clear'):
+                        clear_all_history()
+                        st.success("Histórico limpo com sucesso!")
+                        st.session_state['confirm_clear'] = False
+                        st.rerun()
+                    else:
+                        st.session_state['confirm_clear'] = True
+                        st.warning("Clique novamente para confirmar!")
 
             # Distribuição global de características suspeitas
             st.markdown("---")
-            st.markdown("#### 📊 Distribuição Global de Características Suspeitas")
+            st.markdown("#### Distribuição Global de Características Suspeitas")
             df_flags = df.copy()
             df_flags["flags"] = df_flags["flags"].apply(
                 lambda x: json.loads(x) if isinstance(x, str) and x.strip() else []
@@ -563,7 +578,7 @@ def main():
             # Selecionar ID
             st.markdown("#### 🔎 Selecione uma análise para visualizar o relatório completo")
             
-            col_select1, col_select2 = st.columns([3, 1])
+            col_select1, col_select2, col_select3 = st.columns([3, 1, 1])
             with col_select1:
                 id_list = df["id"].tolist()
                 selected_id = st.selectbox(
@@ -574,7 +589,14 @@ def main():
             
             with col_select2:
                 st.markdown("<br>", unsafe_allow_html=True)
-                if st.button("🔄 Atualizar Lista", use_container_width=True):
+                if st.button("Atualizar", use_container_width=True):
+                    st.rerun()
+            
+            with col_select3:
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("Deletar", type="secondary", use_container_width=True):
+                    delete_by_id(selected_id)
+                    st.success(f"Análise #{selected_id} deletada!")
                     st.rerun()
 
             row = df[df["id"] == selected_id].iloc[0]
@@ -588,7 +610,7 @@ def main():
             st.markdown("---")
             
             # Resumo em cards
-            st.markdown(f"#### 📊 Resumo da Análise #{selected_id}")
+            st.markdown(f"#### Resumo da Análise #{selected_id}")
             col_a, col_b, col_c, col_d = st.columns(4)
             
             score_val = row['score']
@@ -605,7 +627,7 @@ def main():
             with col_a:
                 st.metric(f"{score_color} Score", f"{score_val}/100")
             with col_b:
-                st.metric("🌐 Domínio", raw.get("domain", row["domain"]))
+                st.metric("Domínio", raw.get("domain", row["domain"]))
             with col_c:
                 st.metric("🚩 Flags", len(flags_single) if flags_single else 0)
             with col_d:
@@ -621,13 +643,13 @@ def main():
                 flag_explanations = {
                     "blacklist": "🛡️ Domínio em lista de sites maliciosos",
                     "young_domain": "📅 Domínio muito recente",
-                    "ssl_invalid": "🔒 Problema no certificado SSL",
-                    "ssl_expired": "⏰ Certificado SSL expirado",
-                    "ssl_hostname_mismatch": "⚠️ Nome do certificado não coincide",
+                    "ssl_invalid": "Problema no certificado SSL",
+                    "ssl_expired": "Certificado SSL expirado",
+                    "ssl_hostname_mismatch": "Nome do certificado não coincide",
                     "redirects": "🔀 Redirecionamentos detectados",
                     "form_with_password": "🔐 Formulário com senha",
                     "similar_to_brand": "🏷️ Similar a marca conhecida",
-                    "many_subdomains": "🌐 Excesso de subdomínios",
+                    "many_subdomains": "Excesso de subdomínios",
                     "special_chars_in_domain": "❓ Caracteres especiais",
                     "numbers_in_place_of_letters": "🔢 Números no lugar de letras",
                     "dynamic_dns": "🌍 DNS dinâmico"
@@ -642,7 +664,7 @@ def main():
                 )
                 st.bar_chart(df_flags_single.set_index("flag"), height=300)
             else:
-                st.success("✅ Nenhuma característica suspeita detectada")
+                st.success("Nenhuma característica suspeita detectada")
 
             # JSON técnico
             st.markdown("---")

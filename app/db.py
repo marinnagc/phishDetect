@@ -36,3 +36,19 @@ def read_history(limit=200):
     df = pd.read_sql_query("SELECT * FROM history ORDER BY id DESC LIMIT ?", conn, params=(limit,))
     conn.close()
     return df
+
+def delete_by_id(analysis_id: int):
+    """Delete uma análise específica por ID"""
+    conn = sqlite3.connect(DB)
+    cur = conn.cursor()
+    cur.execute("DELETE FROM history WHERE id = ?", (analysis_id,))
+    conn.commit()
+    conn.close()
+
+def clear_all_history():
+    """Apaga todo o histórico"""
+    conn = sqlite3.connect(DB)
+    cur = conn.cursor()
+    cur.execute("DELETE FROM history")
+    conn.commit()
+    conn.close()

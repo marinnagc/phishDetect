@@ -1,0 +1,52 @@
+============================================================
+RELATÓRIO PADRONIZADO DE ANÁLISE DE URL - PHISHDETECT
+============================================================
+
+1. DADOS GERAIS
+- URL analisada: http://phishing.duckdns.org/
+- Domínio: phishing.duckdns.org
+- Score de risco: 65/100
+- Nível de risco (heurístico): MODERADO
+
+2. CARACTERÍSTICAS TÉCNICAS DO DOMÍNIO
+- Registrar (WHOIS): None
+- Data de criação registrada (WHOIS): None
+- Idade aproximada do domínio: Não foi possível determinar a idade do domínio.
+- Informações de DNS: Registros A: 86.159.11.135 | Registros MX: 50 phishing.duckdns.org.
+
+3. CERTIFICADO SSL/TLS
+- Situação: Houve falha na validação do certificado SSL/TLS: Site não possui HTTPS (porta 443 fechada)
+- Emissor do certificado (quando disponível): None
+- Validade (notAfter, quando disponível): None
+- Expirado: None
+- Coincidência de hostname no certificado: None
+
+4. REDIRECIONAMENTOS
+- Cadeia de redirecionamentos (URL final é o último elemento): []
+- Resumo: Nenhum redirecionamento adicional foi identificado.
+
+5. ANÁLISE DE CONTEÚDO E FORMULÁRIOS
+- Quantidade de formulários = 0
+- Detalhes: Não foram encontrados formulários na página analisada.
+
+6. SIMILARIDADE COM MARCAS CONHECIDAS
+- Resultado: Não foram encontradas similaridades significativas com domínios de marcas conhecidas nas heurísticas aplicadas.
+
+7. CARACTERÍSTICAS SUSPEITAS (FLAGS)
+- Flags detectadas:
+- young_domain: Domínio recente (ou sem dados WHOIS confiáveis), o que aumenta o risco.
+- ssl_invalid: Problema na verificação do certificado SSL/TLS (inválido, ausente ou erro na conexão).
+- dynamic_dns: Domínio aparenta usar serviço de DNS dinâmico (no-ip, dyndns), comum em cenários maliciosos.
+
+8. AVALIAÇÃO GERAL E RECOMENDAÇÕES
+Com base nas heurísticas implementadas (idade do domínio, SSL, redirecionamentos,
+presença de formulários sensíveis, similaridade com marcas e listas de reputação),
+o score de risco calculado foi de 65/100, resultando no nível de risco: MODERADO.
+
+Recomendações:
+- Recomenda-se cautela ao acessar esta URL, validação adicional por equipe de segurança e monitoramento de novos acessos ou alterações no domínio.
+
+Este relatório foi gerado automaticamente pela ferramenta PhishDetect a partir
+dos dados coletados no momento da análise.
+
+============================================================
